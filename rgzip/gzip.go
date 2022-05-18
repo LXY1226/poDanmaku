@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package gzip
+package rgzip
 
 import (
+	"bytes"
 	"compress/flate"
 	"compress/gzip"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"hash/crc32"
 	"io"
 	"time"
@@ -44,13 +44,13 @@ type Writer struct {
 	gzip.Header // written at first call to Write, Flush, or Close
 	w           io.Writer
 	level       int
-	wroteHeader bool
-	compressor  *flate.Writer
-	digest      uint32 // CRC-32, IEEE polynomial (section 8)
-	size        uint32 // Uncompressed size (section 2.3.1)
-	closed      bool
-	buf         [10]byte
-	err         error
+	//wroteHeader bool
+	compressor *flateWriter
+	digest     uint32 // CRC-32, IEEE polynomial (section 8)
+	size       uint32 // Uncompressed size (section 2.3.1)
+	closed     bool
+	buf        [10]byte
+	err        error
 }
 
 // NewWriter returns a new Writer.
@@ -62,7 +62,7 @@ type Writer struct {
 // Callers that wish to set the fields in Writer.Header must do so before
 // the first call to Write, Flush, or Close.
 func NewWriter(w io.Writer) *Writer {
-	z, _ := NewWriterLevel(w, DefaultCompression)
+	z, _ := NewWriterLevel(w, BestCompression)
 	return z
 }
 
@@ -73,11 +73,55 @@ func NewWriter(w io.Writer) *Writer {
 // or any integer value between BestSpeed and BestCompression inclusive.
 // The error returned will be nil if the level is valid.
 func NewWriterLevel(w io.Writer, level int) (*Writer, error) {
-	if level < HuffmanOnly || level > BestCompression {
-		return nil, fmt.Errorf("gzip: invalid compression level: %d", level)
-	}
 	z := new(Writer)
 	z.init(w, level)
+	// Wrote Header instantly
+	z.buf = [10]byte{0: gzipID1, 1: gzipID2, 2: gzipDeflate}
+	if z.Extra != nil {
+		z.buf[3] |= 0x04
+	}
+	if z.Name != "" {
+		z.buf[3] |= 0x08
+	}
+	if z.Comment != "" {
+		z.buf[3] |= 0x10
+	}
+	if z.ModTime.After(time.Unix(0, 0)) {
+		// Section 2.3.1, the zero value for MTIME means that the
+		// modified time is not set.
+		le.PutUint32(z.buf[4:8], uint32(z.ModTime.Unix()))
+	}
+	if z.level == BestCompression {
+		z.buf[8] = 2
+	} else if z.level == BestSpeed {
+		z.buf[8] = 4
+	}
+	z.buf[9] = z.OS
+	_, z.err = z.w.Write(z.buf[:10])
+	if z.err != nil {
+		return nil, z.err
+	}
+	if z.Extra != nil {
+		z.err = z.writeBytes(z.Extra)
+		if z.err != nil {
+			return nil, z.err
+		}
+	}
+	if z.Name != "" {
+		z.err = z.writeString(z.Name)
+		if z.err != nil {
+			return nil, z.err
+		}
+	}
+	if z.Comment != "" {
+		z.err = z.writeString(z.Comment)
+		if z.err != nil {
+			return nil, z.err
+		}
+	}
+	if z.compressor == nil {
+		z.compressor, _ = flateNewWriter(z.w, z.level)
+	}
 	return z, nil
 }
 
@@ -156,85 +200,41 @@ func (z *Writer) Write(p []byte) (int, error) {
 		return 0, z.err
 	}
 	var n int
-	// Write the GZIP header lazily.
-	if !z.wroteHeader {
-		z.wroteHeader = true
-		z.buf = [10]byte{0: gzipID1, 1: gzipID2, 2: gzipDeflate}
-		if z.Extra != nil {
-			z.buf[3] |= 0x04
-		}
-		if z.Name != "" {
-			z.buf[3] |= 0x08
-		}
-		if z.Comment != "" {
-			z.buf[3] |= 0x10
-		}
-		if z.ModTime.After(time.Unix(0, 0)) {
-			// Section 2.3.1, the zero value for MTIME means that the
-			// modified time is not set.
-			le.PutUint32(z.buf[4:8], uint32(z.ModTime.Unix()))
-		}
-		if z.level == BestCompression {
-			z.buf[8] = 2
-		} else if z.level == BestSpeed {
-			z.buf[8] = 4
-		}
-		z.buf[9] = z.OS
-		_, z.err = z.w.Write(z.buf[:10])
-		if z.err != nil {
-			return 0, z.err
-		}
-		if z.Extra != nil {
-			z.err = z.writeBytes(z.Extra)
-			if z.err != nil {
-				return 0, z.err
-			}
-		}
-		if z.Name != "" {
-			z.err = z.writeString(z.Name)
-			if z.err != nil {
-				return 0, z.err
-			}
-		}
-		if z.Comment != "" {
-			z.err = z.writeString(z.Comment)
-			if z.err != nil {
-				return 0, z.err
-			}
-		}
-		if z.compressor == nil {
-			z.compressor, _ = flate.NewWriter(z.w, z.level)
-		}
-	}
 	z.size += uint32(len(p))
 	z.digest = crc32.Update(z.digest, crc32.IEEETable, p)
 	n, z.err = z.compressor.Write(p)
 	return n, z.err
 }
 
-// Flush flushes any pending compressed data to the underlying writer.
-//
-// It is useful mainly in compressed network protocols, to ensure that
-// a remote reader has enough data to reconstruct a packet. Flush does
-// not return until the data has been written. If the underlying
-// writer returns an error, Flush returns that error.
-//
-// In the terminology of the zlib library, Flush is equivalent to Z_SYNC_FLUSH.
-func (z *Writer) Flush() error {
-	if z.err != nil {
-		return z.err
-	}
-	if z.closed {
-		return nil
-	}
-	if !z.wroteHeader {
-		z.Write(nil)
-		if z.err != nil {
-			return z.err
-		}
-	}
-	z.err = z.compressor.Flush()
-	return z.err
+func (z *Writer) Hash() uint32 {
+	return z.digest
+}
+
+func (z *Writer) clone() *Writer {
+	z2 := cloneT(z)
+	z2.compressor = z.compressor.clone()
+	z2.Extra = cloneArrT(z.Extra)
+	return z2
+}
+
+func (z *Writer) setOutput(b *bytes.Buffer) {
+	z.w = b
+	z.compressor.setOutput(b)
+}
+
+func (z *Writer) Clone() *Writer {
+	return z.clone()
+}
+
+func (z *Writer) Tail() []byte {
+	b := new(bytes.Buffer)
+	z.setOutput(b)
+	z.Close()
+	return b.Bytes()
+}
+
+func (z *Writer) TempClose() []byte {
+	return z.clone().Tail()
 }
 
 // Close closes the Writer by flushing any unwritten data to the underlying
@@ -248,12 +248,6 @@ func (z *Writer) Close() error {
 		return nil
 	}
 	z.closed = true
-	if !z.wroteHeader {
-		z.Write(nil)
-		if z.err != nil {
-			return z.err
-		}
-	}
 	z.err = z.compressor.Close()
 	if z.err != nil {
 		return z.err

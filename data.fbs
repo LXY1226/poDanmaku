@@ -1,0 +1,29 @@
+// example
+
+namespace flat;
+
+table RoomInfo {
+    area_id: uint16;
+    parent_area_id: uint16;
+    attention: uint32;
+    online: uint32;
+    live_status: bool;
+    is_strict_room: bool;
+    description: string;
+    background: string;
+    title: string;
+    user_cover: string;
+    area_name: string;
+}
+
+table UserInfo {
+    uid: uint32;
+    uname: string;
+    face: string;
+}
+
+table Tag {
+    time: uint64;
+    room: RoomInfo;
+    user: UserInfo;
+}

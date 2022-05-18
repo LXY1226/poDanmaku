@@ -1,0 +1,6 @@
+data/
+
+tasks.db
+channel.json
+go_build*
+*log
