@@ -1,24 +1,27 @@
 package bili
 
+// Package bili GENERATED CODE by copilot - DO NOT EDIT
+
+const (
+	RoomId = iota
+	ShortId
+	LiveStatus
+	Attention
+	Online
+	Description
+	AreaId
+	AreaName
+	ParentAreaId
+	ParentAreaName
+	Background
+	Title
+	UserCover
+	IsStrictRoom
+	Tags
+	IsAnchor
+)
+
 func (info *RoomInfo) GenDelta(from *RoomInfo) []byte {
-	const (
-		RoomId = iota
-		ShortId
-		LiveStatus
-		Attention
-		Online
-		Description
-		AreaId
-		AreaName
-		ParentAreaId
-		ParentAreaName
-		Background
-		Title
-		UserCover
-		IsStrictRoom
-		Tags
-		IsAnchor
-	)
 
 	builder := Encoder{}
 	if info.RoomId != from.RoomId {
@@ -71,45 +74,7 @@ func (info *RoomInfo) GenDelta(from *RoomInfo) []byte {
 	}
 	return builder.EncodeAppend(nil)
 }
-
-func (info *UserInfo) GenDelta(from *UserInfo) []byte {
-	const (
-		UID = iota
-		Uname
-		Face
-	)
-	builder := Encoder{}
-	if info.UID != from.UID {
-		builder.AppendI32(UID, info.UID)
-	}
-	if info.Uname != from.Uname {
-		builder.AppendString(Uname, info.Uname)
-	}
-	if info.Face != from.Face {
-		builder.AppendString(Face, info.Face)
-	}
-	return builder.EncodeAppend(nil)
-}
-
 func (info *RoomInfo) UpdateDelta(delta []byte) {
-	const (
-		RoomId = iota
-		ShortId
-		LiveStatus
-		Attention
-		Online
-		Description
-		AreaId
-		AreaName
-		ParentAreaId
-		ParentAreaName
-		Background
-		Title
-		UserCover
-		IsStrictRoom
-		Tags
-		IsAnchor
-	)
 	decoder := Decoder(delta)
 	tag, typ := decoder.Next()
 	if typ == TypeEndOfData {
@@ -222,6 +187,55 @@ func (info *RoomInfo) UpdateDelta(delta []byte) {
 	}
 	if tag == IsAnchor {
 		info.IsAnchor = decoder.AsI8()
+		tag, typ = decoder.Next()
+		if typ == TypeEndOfData {
+			return
+		}
+	}
+}
+
+const (
+	UID = iota
+	Uname
+	Face
+)
+
+func (info *UserInfo) GenDelta(from *UserInfo) []byte {
+	builder := Encoder{}
+	if info.UID != from.UID {
+		builder.AppendI32(UID, info.UID)
+	}
+	if info.Uname != from.Uname {
+		builder.AppendString(Uname, info.Uname)
+	}
+	if info.Face != from.Face {
+		builder.AppendString(Face, info.Face)
+	}
+	return builder.EncodeAppend(nil)
+}
+
+func (info *UserInfo) UpdateDelta(delta []byte) {
+	decoder := Decoder(delta)
+	tag, typ := decoder.Next()
+	if typ == TypeEndOfData {
+		return
+	}
+	if tag == UID {
+		info.UID = decoder.AsI32()
+		tag, typ = decoder.Next()
+		if typ == TypeEndOfData {
+			return
+		}
+	}
+	if tag == Uname {
+		info.Uname = decoder.AsString(typ)
+		tag, typ = decoder.Next()
+		if typ == TypeEndOfData {
+			return
+		}
+	}
+	if tag == Face {
+		info.Face = decoder.AsString(typ)
 		tag, typ = decoder.Next()
 		if typ == TypeEndOfData {
 			return
