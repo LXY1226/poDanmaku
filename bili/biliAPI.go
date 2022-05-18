@@ -93,13 +93,13 @@ type (
 		//Uid       int `json:"uid"`
 		RoomId    uint32 `json:"room_id"`
 		ShortId   uint32 `json:"short_id"`
-		Attention int    `json:"attention"`
-		Online    int    `json:"online"`
+		Attention uint64 `json:"attention"`
+		Online    uint64 `json:"online"`
 		//IsPortrait       bool     `json:"is_portrait"`
 		Description    string `json:"description"`
-		LiveStatus     int    `json:"live_status"`
-		AreaId         int    `json:"area_id"`
-		ParentAreaId   int    `json:"parent_area_id"`
+		LiveStatus     uint8  `json:"live_status"`
+		AreaId         uint16 `json:"area_id"`
+		ParentAreaId   uint16 `json:"parent_area_id"`
 		ParentAreaName string `json:"parent_area_name"`
 		//OldAreaId        int      `json:"old_area_id"`
 		Background string `json:"background"`
@@ -109,7 +109,7 @@ type (
 		IsStrictRoom bool `json:"is_strict_room"`
 		//LiveTime         string   `json:"live_time"`
 		Tags     string `json:"tags"`
-		IsAnchor int    `json:"is_anchor"`
+		IsAnchor uint8  `json:"is_anchor"`
 		//RoomSilentType   string   `json:"room_silent_type"`
 		//RoomSilentLevel  int      `json:"room_silent_level"`
 		//RoomSilentSecond int      `json:"room_silent_second"`

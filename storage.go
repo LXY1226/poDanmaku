@@ -8,7 +8,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unsafe"
 )
 
 const dataDir = "data/"
@@ -62,55 +61,12 @@ type DanmakuFile struct {
 	count  int64
 }
 
-type TagType uint64
 
-type Tag struct {
-	time  uint64
-	stat  uint64
-	extra uint64
-
-	coverLen uint32
-	titleLen uint32
-
-	cover, title string
-}
-
-func (t *Tag) FillWithRoom(room *User) {
-
-}
-
-const (
-	TagMask TagType = 0xF << (64 - 4)
-	TagTime TagType = iota
-	TagNum
-	TagStatus
-
-	TagCustom = 0xF
-)
-
-func (f *DanmakuFile) TagByTime(time uint64) {
-	f.Tag(TagTime, time)
-}
-
-type StatType uint64
-
-const (
-	StatLive StatType = iota
-	StatOffline
-)
-
-func (f *DanmakuFile) TagByStatus(status uint64) {
-	f.Tag(TagStatus, status)
-}
-
-func (f *DanmakuFile) Tag(typ TagType, tag uint64) {
-	if tag&uint64(TagMask) != 0 {
-		panic("tag's first 4bit should be zero")
-	}
-	tag |= uint64(typ) << (64 - 4)
-	offset := f.data.ReOpen()
-	f.tags.Write((*(*[8]byte)(unsafe.Pointer(&tag)))[:])
-	f.tags.Write((*(*[8]byte)(unsafe.Pointer(&offset)))[:])
+func (f *DanmakuFile) CheckPoint() {
+	room, user := f.room.RoomInfo, f.room.UserInfo
+	f.room.fetchRoomInfo()
+	f.room.fetchUserInfo()
+	room.
 }
 
 func (f *DanmakuFile) WriteDanmaku(data []byte) {
@@ -137,6 +93,7 @@ func (f *DanmakuFile) HttpHandler(w http.ResponseWriter, req *http.Request) {
 func (f *DanmakuFile) Close() {
 	f.data.Close()
 	f.data = nil
+
 }
 
 func NewDanmaku(prefix string) (f *DanmakuFile) {
@@ -163,6 +120,7 @@ func (f *DanmakuFile) NextFile() {
 		panic(err)
 	}
 }
+
 
 // GzIndex raw uint32 array
 type GzIndex struct {

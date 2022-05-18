@@ -48,7 +48,7 @@ func (g *gzStreamFile) ReOpen() (offset int64) {
 	return g.lastHead
 }
 
-// WriteChunk 用于响应整个弹幕数据中的一段
+// WriteChunk 用于响应整个gz数据中的一段
 func (g *gzStreamFile) WriteChunk(eTag string, wr http.ResponseWriter, start, end int64) {
 	if end < 8 {
 		http.Error(wr, "bad gz range", http.StatusInternalServerError)
@@ -57,7 +57,7 @@ func (g *gzStreamFile) WriteChunk(eTag string, wr http.ResponseWriter, start, en
 	var crc [4]byte
 	n, err := g.f.ReadAt(crc[:], end-8)
 	if err != nil {
-		http.Error(wr, fmt.Sprint("read fail", err), http.StatusGone)
+		http.Error(wr, fmt.Sprint("read crc fail", err), http.StatusGone)
 		return
 	}
 	if n != 4 {

@@ -1,4 +1,4 @@
-package dtlv
+package bili
 
 import (
 	"encoding/binary"
@@ -26,7 +26,8 @@ const (
 	TypeStructEnd
 	TypeZero
 	TypeBytes
-	TypeVarInt // custom
+	TypeVarInt    // custom
+	TypeEndOfData = 0xFF
 )
 
 type Head struct {
@@ -132,6 +133,14 @@ func (enc *Encoder) AppendString(tag Tag, v string) {
 	*enc = append(*enc, Head{TypeString4, tag, dat{bs, S2B(v)}})
 }
 
+func (enc *Encoder) AppendBool(tag Tag, v bool) {
+	if v {
+		enc.AppendI8(tag, 1)
+	} else {
+		enc.AppendZero(tag)
+	}
+}
+
 func (enc *Encoder) AppendZero(tag Tag) {
 	*enc = append(*enc, Head{TypeZero, tag, dat{}})
 }
@@ -180,4 +189,80 @@ func S2B(s string) (b []byte) {
 	bh.Cap = sh.Len
 	bh.Len = sh.Len
 	return
+}
+
+type Decoder []byte
+
+func (d *Decoder) Next() (tag Tag, typ Type) {
+	if len(*d) == 0 {
+		return 0, TypeEndOfData
+	}
+	typ = (*d)[0]
+	if typ < 15 {
+		tag = typ >> 4
+		*d = (*d)[1:]
+	} else {
+		tag = Tag((*d)[1])
+		*d = (*d)[2:]
+	}
+	typ &= 0xF
+	return
+}
+
+func (d *Decoder) AsI8() uint8 {
+	b := (*d)[0]
+	*d = (*d)[1:]
+	return b
+}
+
+func (d *Decoder) AsI16() uint16 {
+	b := (*d)[:2]
+	*d = (*d)[2:]
+	return binary.LittleEndian.Uint16(b)
+}
+
+func (d *Decoder) AsI32() uint32 {
+	b := (*d)[:4]
+	*d = (*d)[4:]
+	return binary.LittleEndian.Uint32(b)
+}
+
+func (d *Decoder) AsI64() uint64 {
+	b := (*d)[:8]
+	*d = (*d)[8:]
+	return binary.LittleEndian.Uint64(b)
+}
+
+func (d *Decoder) AsUVarInt() uint32 {
+	u, n := binary.Varint(*d)
+	*d = (*d)[n:]
+	return uint32(u)
+}
+
+func (d *Decoder) AsFloat32() float32 {
+	return math.Float32frombits(d.AsI32())
+}
+
+func (d *Decoder) AsFloat64() float64 {
+	return math.Float64frombits(d.AsI64())
+}
+
+func (d *Decoder) AsString(typ Type) string {
+	if typ == TypeString1 {
+		l := d.AsI8()
+		str := (*d)[:l]
+		*d = (*d)[l:]
+		return string(str)
+	}
+	l := d.AsI32()
+	str := (*d)[:l]
+	*d = (*d)[l:]
+	return string(str)
+}
+
+func (d *Decoder) AsBool(typ Type) bool {
+	if typ == TypeZero {
+		return false
+	}
+	return d.AsI8() != 0
 }

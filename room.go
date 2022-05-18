@@ -11,16 +11,16 @@ type User struct {
 }
 
 func (r *User) Start(index int) {
-	r.updateUserInfo()
-	r.updateRoomInfo()
+	r.fetchUserInfo()
+	r.fetchRoomInfo()
 	go NewRecord(r).Start(index)
 }
 
-func (r *User) updateUserInfo() {
+func (r *User) fetchUserInfo() {
 	r.UserInfo = bili.GetUserInfo(r.id)
 }
 
-func (r *User) updateRoomInfo() {
+func (r *User) fetchRoomInfo() {
 	r.RoomInfo = bili.GetRoomInfo(r.id)
 
 }
